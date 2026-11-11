@@ -1,0 +1,7 @@
+{
+  "appId": "com.esp32.carcontroller",
+  "appName": "ESP32 Car",
+  "webDir": "www",
+  "server": { "androidScheme": "http", "cleartext": true },
+  "android": { "allowMixedContent": true }
+}

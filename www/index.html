@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1115">
+<title>ESP32 Car</title>
+<style>
+:root{--bg:#0f1115;--panel:#181b22;--btn:#232834;--txt:#e8ecf4;--dim:#8892a6;--acc:#38bdf8;--turbo:#f97316}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;overflow:hidden}
+body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+header{display:flex;justify-content:space-between;align-items:center;padding:10px 0;gap:8px}
+h1{font-size:18px;margin:0}
+.st{font-size:13px;color:var(--dim);display:flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%;background:#ef4444}.dot.ok{background:#22c55e}
+#ipbox{display:none;gap:6px;margin-bottom:6px}
+#ipbox input{flex:1;background:var(--panel);border:1px solid #2a3040;color:var(--txt);border-radius:10px;padding:10px;font-size:16px}
+#ipbox button{background:var(--acc);border:0;border-radius:10px;padding:0 16px;font-weight:700}
+main{flex:1;display:flex;flex-direction:column;justify-content:space-around;align-items:center;gap:12px;min-height:0}
+.modes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:480px}
+.modes button{background:var(--panel);color:var(--dim);border:2px solid #2a3040;border-radius:12px;padding:14px 0;font-size:14px;font-weight:600}
+.modes button.on{color:#06222f;background:var(--acc);border-color:var(--acc)}
+.modes button.on.t{background:var(--turbo);border-color:var(--turbo);color:#2a1100}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:10px;width:min(80vw,46vh,340px);aspect-ratio:1}
+.pad button{background:var(--btn);border:0;border-radius:20px;color:var(--txt);font-size:34px;display:flex;align-items:center;justify-content:center}
+.pad button.down{background:var(--acc);color:#06222f;transform:scale(.95)}
+.pad .f{grid-column:2;grid-row:1}.pad .l{grid-column:1;grid-row:2}.pad .s{grid-column:2;grid-row:2;background:#3a1d22;font-size:15px;font-weight:700;color:#fca5a5}
+.pad .r{grid-column:3;grid-row:2}.pad .b{grid-column:2;grid-row:3}
+</style>
+</head>
+<body>
+<header><h1>🚗 ESP32 Car</h1><div class="st"><span class="dot" id="dot"></span><span id="stx">Offline</span></div></header>
+<div id="ipbox"><input id="ip" inputmode="decimal" placeholder="Car IP, e.g. 192.168.4.1"><button id="save">Save</button></div>
+<main>
+<div class="modes" id="modes">
+<button data-s="1">Low</button><button data-s="2" class="on">Medium</button><button data-s="3">High</button><button data-s="4" class="t">Turbo</button>
+</div>
+<div class="pad">
+<button class="f" data-d="F">▲</button><button class="l" data-d="L">◀</button><button class="s" data-d="S">STOP</button>
+<button class="r" data-d="R">▶</button><button class="b" data-d="B">▼</button>
+</div>
+</main>
+<script>
+const isFile = location.protocol !== 'http:' || /claude|anthropic|localhost/.test(location.host);
+const ipEl=document.getElementById('ip'), box=document.getElementById('ipbox');
+let base='';
+if(isFile){box.style.display='flex';let v='192.168.4.1';try{v=localStorage.getItem('carip')||v}catch(e){}ipEl.value=v;base='http://'+v}
+document.getElementById('save').onclick=()=>{const v=ipEl.value.trim();base='http://'+v;try{localStorage.setItem('carip',v)}catch(e){}ping()};
+let speed=2,dir='S',timer=null;
+const dot=document.getElementById('dot'),stx=document.getElementById('stx');
+function status(ok){dot.className='dot'+(ok?' ok':'');stx.textContent=ok?'Connected':'Offline'}
+async function send(d){
+  try{const c=new AbortController();setTimeout(()=>c.abort(),800);
+    await fetch(`${base}/cmd?d=${d}&s=${speed}&t=${Date.now()}`,{signal:c.signal,mode:'no-cors',cache:'no-store'});status(true)}
+  catch(e){status(false)}
+}
+function ping(){send('S')}
+function start(d){dir=d;send(d);clearInterval(timer);if(d!=='S')timer=setInterval(()=>send(dir),150)}
+function stop(){clearInterval(timer);timer=null;dir='S';send('S')}
+document.querySelectorAll('.pad button').forEach(b=>{
+  const d=b.dataset.d;
+  const down=e=>{e.preventDefault();b.classList.add('down');if(navigator.vibrate)navigator.vibrate(15);start(d)};
+  const up=e=>{e.preventDefault();b.classList.remove('down');stop()};
+  b.addEventListener('pointerdown',down);
+  ['pointerup','pointercancel','pointerleave'].forEach(n=>b.addEventListener(n,up));
+  b.addEventListener('contextmenu',e=>e.preventDefault());
+});
+document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#modes button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');speed=+b.dataset.s;if(dir!=='S')send(dir)});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop()});
+setInterval(()=>{if(dir==='S')ping()},3000);ping();
+</script>
+</body>
+</html>
